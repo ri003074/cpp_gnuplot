@@ -60,6 +60,7 @@ private:
     void calcPaletteDefined();
     void calcCbtics();
     void calcXtics();
+    void calcYtics();
 
 public:
     void readShmFile(string fileName);
