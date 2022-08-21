@@ -78,6 +78,9 @@ private:
 
     int maxFailCount;
 
+    const static int xAxisDigits = 5;
+    const static int yAxisDigits = 5;
+
     void generateIntermediateFile();
     void calcFailCountList();
     void calcPaletteDefined();
@@ -121,6 +124,13 @@ void Gnuplot::readShmFile(string fileName)
             shmErrorCount.push_back(shmLine);
         }
     }
+
+    vector<double> tmp;
+    tmp = shmYAxis;
+    for (int i = 0; i < shmYAxis.size(); i++)
+    {
+        shmYAxis[i] = tmp[shmYAxis.size() - 1 - i];
+    }
 }
 
 void Gnuplot::generateIntermediateFile()
@@ -148,7 +158,7 @@ void Gnuplot::generateIntermediateFile()
             }
             else
             {
-                int failCount = StringToInt(shmErrorCount[y][x]) - StringToInt(shmErrorCount[y + 1][x]);
+                int failCount = abs(StringToInt(shmErrorCount[y][x]) - StringToInt(shmErrorCount[y + 1][x]));
                 output << failCount;
                 output << " ";
 
@@ -231,11 +241,25 @@ void Gnuplot::calcXtics()
     {
         if (d == minIndexValue)
         {
-            xtics += "\"" + to_string(d) + "\"" + to_string(getNearestIndex(shmXAxis, d));
+            if (d < 0)
+            {
+                xtics += "\"" + to_string(d).substr(0, xAxisDigits + 1) + "\"" + to_string(getNearestIndex(shmXAxis, d));
+            }
+            else
+            {
+                xtics += "\"" + to_string(d).substr(0, xAxisDigits) + "\"" + to_string(getNearestIndex(shmXAxis, d));
+            }
         }
         else
         {
-            xtics += ", \"" + to_string(d) + "\"" + to_string(getNearestIndex(shmXAxis, d));
+            if (d < 0)
+            {
+                xtics += ", \"" + to_string(d).substr(0, xAxisDigits + 1) + "\"" + to_string(getNearestIndex(shmXAxis, d));
+            }
+            else
+            {
+                xtics += ", \"" + to_string(d).substr(0, xAxisDigits) + "\"" + to_string(getNearestIndex(shmXAxis, d));
+            }
             xIndexCount = getNearestIndex(shmXAxis, d);
         }
     }
@@ -245,20 +269,47 @@ void Gnuplot::calcYtics()
 {
     ytics = "";
     yIndexCount = 0;
-    double minIndexValue = shmYAxis[0];
-    double maxIndexValue = shmYAxis[shmYAxis.size() - 1];
-    double resolution = (maxIndexValue - minIndexValue) / 8.0;
 
-    for (double d = minIndexValue; d < maxIndexValue + resolution; d += resolution)
+    for (int i = 0; i < shmYAxis.size(); i++)
     {
-        if (d == minIndexValue)
+        cout << shmYAxis[i] << endl;
+    }
+
+    //TODO refactoring!!!
+    if (shmYAxis[0] > shmYAxis[shmYAxis.size() - 1])
+    {
+        double minIndexValue = shmYAxis[shmYAxis.size() - 1];
+        double maxIndexValue = shmYAxis[0];
+        double resolution = (maxIndexValue - minIndexValue) / 8.0;
+        for (double d = maxIndexValue; d > minIndexValue - resolution; d -= resolution)
         {
-            ytics += "\"" + to_string(d) + "\"" + to_string(getNearestIndex(shmYAxis, d));
+            if (d == maxIndexValue)
+            {
+                ytics += "\"" + to_string(d).substr(0, yAxisDigits) + "\"" + to_string(getNearestIndex(shmYAxis, d));
+            }
+            else
+            {
+                ytics += ", \"" + to_string(d).substr(0, yAxisDigits) + "\"" + to_string(getNearestIndex(shmYAxis, d));
+                yIndexCount = getNearestIndex(shmYAxis, d);
+            }
         }
-        else
+    }
+    else
+    {
+        double minIndexValue = shmYAxis[0];
+        double maxIndexValue = shmYAxis[shmYAxis.size() - 1];
+        double resolution = (maxIndexValue - minIndexValue) / 8.0;
+        for (double d = minIndexValue; d < maxIndexValue + resolution; d += resolution)
         {
-            ytics += ", \"" + to_string(d) + "\"" + to_string(getNearestIndex(shmYAxis, d));
-            yIndexCount = getNearestIndex(shmYAxis, d);
+            if (d == minIndexValue)
+            {
+                ytics += "\"" + to_string(d).substr(0, yAxisDigits) + "\"" + to_string(getNearestIndex(shmYAxis, d));
+            }
+            else
+            {
+                ytics += ", \"" + to_string(d).substr(0, yAxisDigits) + "\"" + to_string(getNearestIndex(shmYAxis, d));
+                yIndexCount = getNearestIndex(shmYAxis, d);
+            }
         }
     }
 }
@@ -298,6 +349,6 @@ void Gnuplot::plot()
 int main()
 {
     Gnuplot gp;
-    gp.readShmFile("data2.txt");
+    gp.readShmFile("data3.txt");
     gp.plot();
 }
