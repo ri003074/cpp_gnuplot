@@ -4,6 +4,24 @@
 #include <vector>
 using namespace std;
 
+int getNearestIndex(vector<double> data, double d)
+{
+    double diff = 999;
+    int index = 999;
+
+    for (int i = 0; i < data.size(); i++)
+    {
+        double _diff = abs(d - data[i]);
+
+        if (diff > _diff)
+        {
+            index = i;
+            diff = _diff;
+        }
+    }
+    return index;
+}
+
 int StringToInt(string str)
 {
     stringstream ss;
@@ -42,13 +60,18 @@ vector<string> split(string s, string delimiter)
 class Gnuplot
 {
 private:
-    vector<string> xAxis;
-    vector<string> yAxis;
+    vector<vector<string> > shmErrorCount;
+    vector<double> shmYAxis;
+    vector<double> shmXAxis;
+
     vector<int> failCountList;
-    vector<vector<string> > shmData;
+
     string paletteDefine;
     string cbtics;
     string xtics;
+    string ytics;
+    int xIndexCount;
+    int yIndexCount;
 
     string inputFileName;
     string intermediateFileName;
@@ -75,23 +98,27 @@ void Gnuplot::readShmFile(string fileName)
     ifs.open(inputFileName, ios::in);
 
     string line;
-
     bool isFirstLine = true;
     while (getline(ifs, line))
     {
         if (isFirstLine)
         {
             isFirstLine = false;
-            xAxis = split(line, ",");
+            vector<string> tmp;
+            tmp = split(line, ",");
+            for (int i = 0; i < tmp.size(); i++)
+            {
+                shmXAxis.push_back(StringToDouble(tmp[i]));
+            }
         }
         else
         {
             vector<string> tmp;
             tmp = split(line, ":");
-            yAxis.push_back(tmp[0]);
+            shmYAxis.push_back(StringToDouble(tmp[0]));
             vector<string> shmLine;
             shmLine = split(tmp[1], " ");
-            shmData.push_back(shmLine);
+            shmErrorCount.push_back(shmLine);
         }
     }
 }
@@ -104,13 +131,13 @@ void Gnuplot::generateIntermediateFile()
     intermediateFileName = inputFileName + "_intermediate";
     output.open(intermediateFileName, ios::out);
 
-    for (int y = 0; y < shmData.size(); y++)
+    for (int y = 0; y < shmErrorCount.size(); y++)
     {
-        for (int x = 0; x < shmData[y].size(); x++)
+        for (int x = 0; x < shmErrorCount[y].size(); x++)
         {
-            if (y == shmData.size() - 1)
+            if (y == shmErrorCount.size() - 1)
             {
-                int failCount = StringToInt(shmData[y][x]) - StringToInt(shmData[y - 1][x]);
+                int failCount = StringToInt(shmErrorCount[y][x]) - StringToInt(shmErrorCount[y - 1][x]);
                 output << failCount;
                 output << " ";
 
@@ -121,7 +148,7 @@ void Gnuplot::generateIntermediateFile()
             }
             else
             {
-                int failCount = StringToInt(shmData[y][x]) - StringToInt(shmData[y + 1][x]);
+                int failCount = StringToInt(shmErrorCount[y][x]) - StringToInt(shmErrorCount[y + 1][x]);
                 output << failCount;
                 output << " ";
 
@@ -146,7 +173,6 @@ void Gnuplot::calcFailCountList()
     for (double i = resolution; i <= maxFailCount + resolution; i += resolution)
     {
         failCountList.push_back(int(i));
-        cout << i << endl;
     }
 }
 
@@ -195,15 +221,45 @@ void Gnuplot::calcCbtics()
 void Gnuplot::calcXtics()
 {
     xtics = "";
+    xIndexCount = 0;
 
-    double minIndexValue = StringToDouble(xAxis[0]);
-    double maxIndexValue = StringToDouble(xAxis[xAxis.size() - 1]);
-
+    double minIndexValue = shmXAxis[0];
+    double maxIndexValue = shmXAxis[shmXAxis.size() - 1];
     double resolution = (maxIndexValue - minIndexValue) / 8.0;
 
     for (double d = minIndexValue; d < maxIndexValue + resolution; d += resolution)
     {
-        cout << d << endl;
+        if (d == minIndexValue)
+        {
+            xtics += "\"" + to_string(d) + "\"" + to_string(getNearestIndex(shmXAxis, d));
+        }
+        else
+        {
+            xtics += ", \"" + to_string(d) + "\"" + to_string(getNearestIndex(shmXAxis, d));
+            xIndexCount = getNearestIndex(shmXAxis, d);
+        }
+    }
+}
+
+void Gnuplot::calcYtics()
+{
+    ytics = "";
+    yIndexCount = 0;
+    double minIndexValue = shmYAxis[0];
+    double maxIndexValue = shmYAxis[shmYAxis.size() - 1];
+    double resolution = (maxIndexValue - minIndexValue) / 8.0;
+
+    for (double d = minIndexValue; d < maxIndexValue + resolution; d += resolution)
+    {
+        if (d == minIndexValue)
+        {
+            ytics += "\"" + to_string(d) + "\"" + to_string(getNearestIndex(shmYAxis, d));
+        }
+        else
+        {
+            ytics += ", \"" + to_string(d) + "\"" + to_string(getNearestIndex(shmYAxis, d));
+            yIndexCount = getNearestIndex(shmYAxis, d);
+        }
     }
 }
 
@@ -214,22 +270,33 @@ void Gnuplot::plot()
     calcPaletteDefined();
     calcCbtics();
     calcXtics();
+    calcYtics();
 
     FILE *gp;
     gp = popen("gnuplot -persist", "w");
-    fprintf(gp, "set pm3d map\n");
-    fprintf(gp, "set xrange[0:100]\n");
-    fprintf(gp, "set xtics (\"-1\" 0,\"0\" 50,\"1\" 100)\n");
-    fprintf(gp, "set palette defined (%s)\n", paletteDefine.c_str());
-    fprintf(gp, "set cbrange[0:%d]\n", maxFailCount);
-    fprintf(gp, "set cbtics (%s)\n", cbtics.c_str());
-    fprintf(gp, "splot \"%s\" matrix with pm3d\n", intermediateFileName.c_str());
+
+    vector<string> gnuplotCommand;
+    gnuplotCommand.push_back("set pm3d map\n");
+    gnuplotCommand.push_back("set xrange[0:" + to_string(xIndexCount) + "]\n");
+    gnuplotCommand.push_back("set xtics (" + xtics + ")\n");
+    gnuplotCommand.push_back("set yrange[0:" + to_string(yIndexCount) + "]\n");
+    gnuplotCommand.push_back("set ytics (" + ytics + ")\n");
+    gnuplotCommand.push_back("set palette defined (" + paletteDefine + ")\n");
+    gnuplotCommand.push_back("set cbrange[0:" + to_string(maxFailCount) + "]\n");
+    gnuplotCommand.push_back("set cbtics (" + cbtics + ")\n");
+    gnuplotCommand.push_back("splot \"" + intermediateFileName + "\" matrix with pm3d\n");
+
+    for (int i = 0; i < gnuplotCommand.size(); i++)
+    {
+        fprintf(gp, "%s\n", gnuplotCommand[i].c_str());
+        cout << gnuplotCommand[i];
+    }
+
     pclose(gp);
 }
 
 int main()
 {
-
     Gnuplot gp;
     gp.readShmFile("data2.txt");
     gp.plot();
