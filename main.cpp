@@ -64,7 +64,7 @@ private:
     vector<double> shmYAxis;
     vector<double> shmXAxis;
 
-    vector<int> failCountList;
+    vector<double> failCountList;
 
     string paletteDefine;
     string cbtics;
@@ -175,7 +175,7 @@ void Gnuplot::generateIntermediateFile()
 void Gnuplot::calcFailCountList()
 {
     failCountList.push_back(0);
-    failCountList.push_back(1);
+    failCountList.push_back(0.9);
 
     double resolution = double(maxFailCount) / 10.0;
 
